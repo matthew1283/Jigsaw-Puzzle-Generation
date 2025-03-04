@@ -3,23 +3,7 @@ import random
 from shapely.geometry import Point
 from basic_functions import *
 import config
-
-def is_edge_shared(edge, piece, pieces):
-    for p in pieces:
-        if p == piece:
-            continue
-        for i, point in enumerate(p.exterior.coords):
-            current_point = Point(point)
-            next_point = Point(p.exterior.coords[(i + 1) % len(p.exterior.coords)])
-            # Check if the edge matches any edge in the piece
-            if (current_point == edge[0] and next_point == edge[1]) or (current_point == edge[1] and next_point == edge[0]):
-                return True
-    return False
-
-def is_edge_touching_outline(edge):
-    if touches_any(edge, config.outline):
-        return True
-    return False
+from checks import is_edge_touching_outline
 
 def stage0(ideal_length):
     theta_pt1 = random.uniform(0, 2 * math.pi)
@@ -36,7 +20,6 @@ def stage0(ideal_length):
 
 def stage1(ideal_length, available_edges):
     usable_edges = []
-    # print(available_edges)
     for edge in available_edges:
         if is_edge_touching_outline(edge):
             usable_edges.append(edge)
@@ -74,10 +57,10 @@ def stage2(ideal_length, available_edges):
             edge1_coords = list(edge1.coords)
             edge2_coords = list(edge2.coords)
             # Check if the edges share a common point
-            if edge1_coords[1] == edge2_coords[0]:  # edge1's end point is edge2's start point
+            if touches_any(Point(edge1_coords[1]), Point(edge2_coords[0])):  # edge1's end point is edge2's start point
                 all_adjacent_edges.append([edge1, edge2])
                 break
-            elif edge1_coords[0] == edge2_coords[1]:  # edge1's start point is edge2's end point
+            elif touches_any(Point(edge1_coords[0]), Point(edge2_coords[1])):  # edge1's start point is edge2's end point
                 all_adjacent_edges.append([edge2, edge1])
                 break
     adjacent_edges = random.choice(all_adjacent_edges)
@@ -104,23 +87,112 @@ def stage2(ideal_length, available_edges):
     angle = math.atan2(points[-1].y, points[-1].x) + math.pi
     return points, angle
 
-def stage3(ideal_length, available_edges):
-    points = []
-    angle= []
+def create_last_piece(available_edges):
+    angle = get_random_angle()
+    
+    usable_edges = [edge for edge in available_edges if is_edge_touching_outline(edge)]
+
+    # Try to find two edges that can form the last piece
+    edge1 = usable_edges[0]
+    edge2 = usable_edges[1]
+
+    # Get the endpoints of the edges
+    edge1_coords = list(edge1.coords)
+    edge2_coords = list(edge2.coords)
+    if touches_any(Point(edge1_coords[0]), config.outline):
+        edge1_circle_point = Point(edge1_coords[0])
+        edge1_other_point = Point(edge1_coords[1])
+    else:
+        edge1_circle_point = Point(edge1_coords[1])
+        edge1_other_point = Point(edge1_coords[0])
+    if touches_any(Point(edge2_coords[0]), config.outline):
+        edge2_circle_point = Point(edge2_coords[0])
+        edge2_other_point = Point(edge2_coords[1])
+    else:
+        edge2_circle_point = Point(edge2_coords[1])
+        edge2_other_point = Point(edge2_coords[0])
+    
+    if edge1_circle_point.distance(edge2_circle_point) > config.last_piece_thickness:
+        return None, angle
+    points = [edge1_other_point, edge1_circle_point, edge2_circle_point, edge2_other_point]
     return points, angle
 
 def choose_start(piece_retries, pieces, ideal_length, available_edges):
-    x = config.stage_attempts_factor
+    # For FIRST PIECE
     if len(pieces) == 0: # 2 points touching circle
-        # print("implementing stage 0, first piece down!")
         points, angle = stage0(ideal_length)
-    elif piece_retries < 5*x: # 1 shared edge, 1 circle edge
-        # print("implementing stage 1")
+        return points, angle
+    
+    # For OTHER PIECES
+    if piece_retries < 5*config.stage_attempts_factor: # 1 shared edge, 1 circle edge
         points, angle = stage1(ideal_length, available_edges)
-    elif piece_retries < 50*x: # 2 shared edge, 1 circle edge
-        # print("implementing stage 2")
+    else: # 2 shared edge, 1 circle edge
         points, angle = stage2(ideal_length, available_edges)
-    elif piece_retries < 100*x: # 3 shared edge, 1 circle edge
-        # print("implementing stage 3")
-        points, angle = stage3(ideal_length, available_edges)
+    return points, angle
+
+def choose_start_for_middle(available_edges, piece_retries):
+    # Find the farthest point from the center
+    farthest_point = None
+    max_distance = 0
+    for edge in available_edges:
+        for point in edge.coords:
+            distance = Point(point).distance(config.center)
+            if distance > max_distance:
+                max_distance = distance
+                farthest_point = Point(point)
+    if not farthest_point:
+        print("No farthest point found. Skipping middle piece creation.")
+        return None, None
+
+    # Find the two edges that share the farthest point
+    edges_with_farthest_point = []
+    for edge in available_edges:
+        if farthest_point.distance(Point(edge.coords[0])) < config.touches_threshold or \
+            farthest_point.distance(Point(edge.coords[1])) < config.touches_threshold:
+            edges_with_farthest_point.append(edge)
+    
+    if len(edges_with_farthest_point) < 2:
+        print("Not enough edges to create a middle piece. Skipping.")
+        return None, None
+
+    # Create a new piece starting from the two edges
+    edge1, edge2 = edges_with_farthest_point[:2]
+    if touches_any(Point(edge1.coords[0]), Point(edge2.coords[0])):
+        points = [Point(edge1.coords[1]), Point(edge1.coords[0]), Point(edge2.coords[1])]
+    elif touches_any(Point(edge1.coords[0]), Point(edge2.coords[1])):
+        points = [Point(edge1.coords[1]), Point(edge1.coords[0]), Point(edge2.coords[0])]
+    elif touches_any(Point(edge1.coords[1]), Point(edge2.coords[0])):
+        points = [Point(edge1.coords[0]), Point(edge1.coords[1]), Point(edge2.coords[1])]
+    else:
+        points = [Point(edge1.coords[0]), Point(edge1.coords[1]), Point(edge2.coords[0])]
+    angle = get_random_angle()
+
+    extra_point_count = 0
+    if piece_retries > 50*config.stage_attempts_factor:
+        extra_point_count = 4
+    elif piece_retries > 30*config.stage_attempts_factor:
+        extra_point_count = 3
+    elif piece_retries > 15*config.stage_attempts_factor:
+        extra_point_count = 2
+    elif piece_retries > 5*config.stage_attempts_factor:
+        extra_point_count = 1
+
+
+
+    
+    for i in range(extra_point_count):
+        point_to_add_to = random.choice([points[0], points[-1]])
+        for edge in available_edges:
+            if touches_any(point_to_add_to, edge):
+                if not touches_any(points[1], edge) or not touches_any(points[-2], edge):
+                    other_point = None
+                    if touches_any(point_to_add_to, Point(edge.coords[0])):
+                        other_point = Point(edge.coords[1])
+                    else:
+                        other_point = Point(edge.coords[0])
+
+                    if point_to_add_to == points[-1]:
+                        points.append(other_point)
+                    else:
+                        points.insert(0, other_point)
     return points, angle
