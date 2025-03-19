@@ -143,7 +143,7 @@ def choose_start_for_middle(available_edges, piece_retries):
     if not farthest_point:
         print("No farthest point found. Skipping middle piece creation.")
         return None, None
-
+    # print(farthest_point)
     # Find the two edges that share the farthest point
     edges_with_farthest_point = []
     for edge in available_edges:
@@ -151,6 +151,7 @@ def choose_start_for_middle(available_edges, piece_retries):
             farthest_point.distance(Point(edge.coords[1])) < config.touches_threshold:
             edges_with_farthest_point.append(edge)
     
+    # print(edges_with_farthest_point)
     if len(edges_with_farthest_point) < 2:
         print("Not enough edges to create a middle piece. Skipping.")
         return None, None
@@ -167,7 +168,13 @@ def choose_start_for_middle(available_edges, piece_retries):
         points = [Point(edge1.coords[0]), Point(edge1.coords[1]), Point(edge2.coords[0])]
     angle = get_random_angle()
 
+
+
     extra_point_count = 0
+    if piece_retries > 100*config.stage_attempts_factor:
+        extra_point_count = 6
+    if piece_retries > 70*config.stage_attempts_factor:
+        extra_point_count = 5
     if piece_retries > 50*config.stage_attempts_factor:
         extra_point_count = 4
     elif piece_retries > 30*config.stage_attempts_factor:
@@ -179,7 +186,6 @@ def choose_start_for_middle(available_edges, piece_retries):
 
 
 
-    
     for i in range(extra_point_count):
         point_to_add_to = random.choice([points[0], points[-1]])
         for edge in available_edges:
@@ -190,9 +196,12 @@ def choose_start_for_middle(available_edges, piece_retries):
                         other_point = Point(edge.coords[1])
                     else:
                         other_point = Point(edge.coords[0])
-
+                    if other_point in points:
+                        break
                     if point_to_add_to == points[-1]:
                         points.append(other_point)
+                        break
                     else:
                         points.insert(0, other_point)
+                        break
     return points, angle

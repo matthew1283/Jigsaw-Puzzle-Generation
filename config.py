@@ -1,4 +1,4 @@
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString
 import math
 
 # Creation of the circle outline
@@ -27,3 +27,11 @@ piece_area = circle_area / number_of_pieces
 area_distribution_factor = 0.5  # Factor for area distribution, +-50%
 upper_piece_area = piece_area * (1 + area_distribution_factor)
 lower_piece_area = piece_area * (1 - area_distribution_factor)
+
+max_number_of_puzzle_generation_retries = 10
+
+connector_scale_factor_from_unit_circle = radius * 0.1
+connector_on_edge_chance = 0.9 # Chance that a connector will be on the edge of the piece
+connector_scale = 0.5
+
+

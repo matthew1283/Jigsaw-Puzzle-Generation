@@ -60,7 +60,7 @@ def find_edge_containing_point(piece: Polygon, point: Point) -> LineString:
     coords = list(piece.exterior.coords)
     for i in range(len(coords) - 1):
         edge = LineString([coords[i], coords[i + 1]])
-        if edge.distance(point) < config.touches_threshold:
+        if touches_any(edge, point):
             return edge
     return None
 

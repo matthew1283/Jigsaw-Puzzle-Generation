@@ -3,7 +3,7 @@ import math
 import matplotlib.pyplot as plt
 import random
 import config
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon
 import numpy as np
 
 def clear_terminal():
@@ -40,19 +40,32 @@ def get_random_angle():
         if abs(a) > config.min_angle_threshold:
             return a
 
+def calc_avg_piece_area(pieces):
+    avg_piece_area = 0
+    for p in pieces:
+        avg_piece_area += p.area
+    avg_piece_area /= len(pieces)
+    return avg_piece_area
+
 def calc_random_length(l):
     return random.uniform(l*(1-config.length_distribution_factor), l*(1+config.length_distribution_factor))
 
 def calculate_side_length(num_sides):
     return math.sqrt((4 * config.piece_area * math.tan(math.pi / num_sides)) / num_sides)
 
-def plot_puzzle(pieces):
+def plot_puzzle(pieces, edges = []):
     fig, ax = plt.subplots()
     for piece in pieces:
         coords = list(piece.exterior.coords)
         x, y = zip(*coords)
 
         ax.plot(x, y, 'blue', alpha=0.5)  # Plot the polygon
+
+    for edge in edges:
+        coords = list(edge.coords)
+        x, y = zip(*coords)
+
+        ax.plot(x, y, 'red', alpha=0.5)  # Plot the edge
 
     # Plot the circle outline
     circle = config.center.buffer(config.radius)
@@ -67,6 +80,7 @@ def plot_puzzle(pieces):
     ax.grid(visible=True, which='both', axis='both', color='gray', linestyle='-', linewidth=0.5)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.show()
+    return ax
 
 def angle_between_three_points(A, B, C):
     BA = (A[0] - B[0], A[1] - B[1])
@@ -79,10 +93,10 @@ def angle_between_three_points(A, B, C):
     return angle
 
 def calculate_polygon_angles(polygon):
-    coords = np.array(polygon.exterior.coords)  # Get coordinates of the polygon
+    coords = np.array(polygon.exterior.coords)[:-1]  # Get coordinates of the polygon
     angles = []
-    for i in range(len(coords) - 2):  # Loop through each triplet of points
-        p1, p2, p3 = coords[i], coords[i + 1], coords[i + 2]
+    for i in range(len(coords)):  # Loop through each triplet of points
+        p1, p2, p3 = coords[i], coords[(i + 1) % len(coords)], coords[(i + 2) % len(coords)]
         angle = angle_between_three_points(p1, p2, p3)
         
         angles.append(angle)
