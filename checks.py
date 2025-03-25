@@ -1,16 +1,15 @@
-from basic_functions import touches_any
-import config
-from basic_functions import calculate_polygon_angles
 from shapely.ops import nearest_points
-from shapely.geometry import Point, LineString, Polygon
+from shapely.geometry import Point, LineString
 import math
+from shapely.strtree import STRtree
+
+import config
+from basic_functions import calculate_polygon_angles, touches_any
 
 def is_edges_equal(edge1, edge2):
     # Extract coordinates directly
-    e1x1, e1y1 = edge1.coords[0]
-    e1x2, e1y2 = edge1.coords[1]
-    e2x1, e2y1 = edge2.coords[0]
-    e2x2, e2y2 = edge2.coords[1]
+    [(e1x1, e1y1), (e1x2, e1y2)] = edge1.coords
+    [(e2x1, e2y1), (e2x2, e2y2)] = edge2.coords
 
     # Check if the edges are equal within tolerance
     return (
@@ -34,16 +33,14 @@ def is_edge_in_piece(edge, p):
     return False
 
 def is_edge_shared(edge, piece, pieces):
-    for p in pieces:
+    tree = STRtree(pieces)
+    possible_pieces = tree.query(edge)
+    possible_pieces = [pieces[i] for i in possible_pieces]
+    for p in possible_pieces:
         if p == piece:
             continue
         if is_edge_in_piece(edge, p):
             return True
-    return False
-
-def is_edge_touching_outline(edge):
-    if touches_any(edge, config.outline):
-        return True
     return False
 
 def is_edge_on_outline(edge):
@@ -51,9 +48,17 @@ def is_edge_on_outline(edge):
     point2 = Point(edge.coords[1])
     return touches_any(point1, config.outline) and touches_any(point2, config.outline)
 
+def is_edge_touching_outline(edge):
+    point1 = Point(edge.coords[0])
+    point2 = Point(edge.coords[1])
+    return touches_any(point1, config.outline) != touches_any(point2, config.outline)
+
 def is_point_in_piece(pieces, point):
-    for piece in pieces:
-        if piece.contains(point) and not touches_any(piece, point):
+    tree = STRtree(pieces)
+    possible_pieces = tree.query(point)
+    possible_pieces = [pieces[i] for i in possible_pieces]
+    for p in possible_pieces:
+        if p.contains(point) and not touches_any(p, point):
             return True
     return False
 
@@ -122,7 +127,6 @@ def get_edges_at_point(polygon, point):
             edges.append(LineString([p1, p2]))
     return edges
 
-
 def calculate_angle_between_edges(edge1, edge2):
     # Get the coordinates of the edges
     p1 = Point(edge1.coords[0])
@@ -161,31 +165,33 @@ def calculate_angle_between_edges(edge1, edge2):
 
     return angle
 
-def is_surrounding_too_skinny_orig(pieces, piece):
-    for p in pieces:
-        if not touches_any(p, piece) and piece.distance(p) < config.min_distance_threshold:
+def is_adjacent(p1, p2):
+    coords = p1.exterior.coords[:-1]
+    for i,coord in enumerate(coords):
+        if touches_any(Point(coord), p2) and touches_any(Point(coords[(i + 1) % len(coords)]), p2):
             return True
     return False
 
 def is_piece_overlapping_piece(p1, p2):
     try:
+        # If distance > 0, they don't overlap
+        if not p1.intersects(p2):
+            return False 
+
         p1_small = p1.buffer(-config.touches_threshold)
         if p1_small.intersects(p2.buffer(-config.touches_threshold)):
                     return True
         return False
+
     except:
-        return True
+        return True  # Fail-safe in case of errors
 
 def is_piece_overlapping_pieces(p1, pieces):
-    for p in pieces:
+    tree = STRtree(pieces)
+    possible_pieces = tree.query(p1)
+    possible_pieces = [pieces[i] for i in possible_pieces]
+    for p in possible_pieces:
         if is_piece_overlapping_piece(p1, p):
-            return True
-    return False
-
-def is_point_on_polygon_edge(point: Point, polygon: Polygon) -> bool:
-    for i in range(len(polygon.exterior.coords) - 1):
-        edge = LineString([polygon.exterior.coords[i], polygon.exterior.coords[i + 1]])
-        if touches_any(edge, point):
             return True
     return False
 
@@ -214,8 +220,11 @@ def check_piece_fit_wo_area(pieces, piece):
     return True
 
 def check_new_point(pieces, new_point):
+    tree = STRtree(pieces)
+    possible_pieces = tree.query(new_point)
+    possible_pieces = [pieces[i] for i in possible_pieces]
     # Check if the new point is too close to any existing piece
-    for p in pieces:
+    for p in possible_pieces:
         if p.distance(new_point) < config.min_distance_threshold:
             # print("moved point to optimize puzzle creation!!!")
             return nearest_points(p, new_point)[0]
@@ -224,3 +233,5 @@ def check_new_point(pieces, new_point):
     if config.outline.distance(new_point) <= config.min_distance_threshold:
         return nearest_points(config.outline, new_point)[0]
     return new_point
+
+

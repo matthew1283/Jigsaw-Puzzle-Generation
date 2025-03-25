@@ -89,7 +89,8 @@ def save_puzzle_state(pieces, available_edges, filename):
             for coord in edge.coords:
                 file.write(f"  {coord}\n")
 
-def create_piece_connectors(pieces):
+def create_piece_connectors():
+    pieces, available_edges = load_puzzle_state('puzzle_outlined.txt')
     # Get all edges (excluding edges on the outline) and their associated piece indices
     edges = get_all_edges(pieces)
     
@@ -98,7 +99,7 @@ def create_piece_connectors(pieces):
 
     # Iterate through each edge
     for i,(edge, piece_indices) in enumerate(edges.items()):
-        print(f"Processing edge {i+1} of {len(edges)}")
+        # print(f"Processing edge {i+1} of {len(edges)}")
         edge_works = True
         # Step 1: Use config.connector_on_edge_chance to determine if a connector is placed
         if random.random() < config.connector_on_edge_chance:
@@ -163,11 +164,7 @@ def create_piece_connectors(pieces):
                     break
             if edge_works:
                 pieces = old_pieces
-    return pieces
-
-pieces, available_edges = load_puzzle_state('puzzle_middle.txt')
-
-new_pieces = create_piece_connectors(pieces)
-
-plot_puzzle(new_pieces)
+    plot_puzzle(pieces, [], False)
+    print('All Pieces Connected!')
+    save_puzzle_state(pieces, available_edges, 'puzzle_connected.txt')
 
